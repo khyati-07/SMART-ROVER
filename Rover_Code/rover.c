@@ -5,9 +5,10 @@
 #define TRIG_PIN A1
 #define ECHO_PIN A0
 #define MAX_DISTANCE 200
-#define SAFE_DISTANCE 25   // Stop if object is closer than 25 cm
-#define TURN_DELAY 300
-#define SCAN_DELAY 250
+#define SAFE_DISTANCE 10   // Stop if object is closer than 10 cm
+#define TURN_DELAY 400     // Increased for better turning
+#define SCAN_DELAY 300     // Increased for better sensor reading
+#define MOTOR_SPEED 50     // Lower speed for testing (can increase to 80-100 for final presentation)
 
 // Objects
 AF_DCMotor motor1(1);
@@ -22,53 +23,103 @@ int distance = 100;
 // ------------------ SETUP ------------------
 void setup() {
   Serial.begin(9600);
+  
+  // Initialize motors with low testing speed
+  setMotorSpeed(MOTOR_SPEED);
+  
+  // Stop all motors initially
+  stopCar();
 
-  // 🔹 Motor speed: reduced drastically (~70% slower)
-  motor1.setSpeed(60);
-  motor2.setSpeed(60);
-  motor3.setSpeed(60);
-  motor4.setSpeed(60);
-
+  // Attach and center servo
   myservo.attach(9);
-  myservo.write(100);
+  myservo.write(90);  // Center position
   delay(1000);
-  Serial.println("Ultra-Safe Obstacle Avoidance Car Started");
+  
+  Serial.println("=================================");
+  Serial.println("SMART ROVER - Obstacle Avoidance");
+  Serial.println("Testing Mode: Speed = 50");
+  Serial.println("Safe Distance: 10 cm");
+  Serial.println("=================================");
+  
+  // Test sensor
+  delay(500);
+  int testDist = getDistance();
+  Serial.print("Initial sensor test: ");
+  Serial.print(testDist);
+  Serial.println(" cm");
+  
+  if (testDist == 0) {
+    Serial.println("WARNING: Sensor may not be working properly!");
+  }
+  
+  delay(1000);
+  Serial.println("Starting rover...");
 }
 
 // ------------------ MAIN LOOP ------------------
 void loop() {
   distance = getDistance();
+  
   Serial.print("Distance Ahead: ");
-  Serial.println(distance);
+  Serial.print(distance);
+  Serial.println(" cm");
 
-  if (distance <= SAFE_DISTANCE) {
-    stopCar();
-    delay(150);
-    moveBackward();
-    delay(400);
+  // Check if obstacle detected
+  if (distance > 0 && distance <= SAFE_DISTANCE) {
+    Serial.println(">>> OBSTACLE DETECTED! <<<");
+    
+    // Stop immediately
     stopCar();
     delay(200);
+    
+    // Move backward a bit
+    Serial.println("Moving backward...");
+    moveBackward();
+    delay(500);
+    
+    // Stop before scanning
+    stopCar();
+    delay(300);
 
+    // Scan both directions
+    Serial.println("Scanning directions...");
     int rightDist = scanRight();
     int leftDist = scanLeft();
 
+    // Decide which way to turn
+    Serial.print("Comparing: Right=");
+    Serial.print(rightDist);
+    Serial.print(" cm, Left=");
+    Serial.print(leftDist);
+    Serial.println(" cm");
+
     if (rightDist > leftDist) {
+      Serial.println("Turning RIGHT");
       turnRight();
     } else {
+      Serial.println("Turning LEFT");
       turnLeft();
     }
+    
     stopCar();
+    delay(200);
   } 
+  else if (distance == 0) {
+    // Sensor returned 0 - could be error or very far
+    Serial.println("No reading - moving slowly forward");
+    moveForward();
+  }
   else {
+    // Path is clear - move forward
+    Serial.println("Path clear - moving forward");
     moveForward();
   }
 
-  delay(80);  // shorter loop delay → quicker response
+  delay(100);  // Loop delay for sensor stability
 }
 
 // ------------------ MOVEMENT FUNCTIONS ------------------
 void moveForward() {
-  setMotorSpeed(70); // very slow
   motor1.run(FORWARD);
   motor2.run(FORWARD);
   motor3.run(FORWARD);
@@ -76,7 +127,6 @@ void moveForward() {
 }
 
 void moveBackward() {
-  setMotorSpeed(60);
   motor1.run(BACKWARD);
   motor2.run(BACKWARD);
   motor3.run(BACKWARD);
@@ -91,20 +141,18 @@ void stopCar() {
 }
 
 void turnLeft() {
-  setMotorSpeed(65);
-  motor1.run(FORWARD);
-  motor2.run(FORWARD);
-  motor3.run(BACKWARD);
-  motor4.run(BACKWARD);
-  delay(TURN_DELAY);
-}
-
-void turnRight() {
-  setMotorSpeed(65);
   motor1.run(BACKWARD);
   motor2.run(BACKWARD);
   motor3.run(FORWARD);
   motor4.run(FORWARD);
+  delay(TURN_DELAY);
+}
+
+void turnRight() {
+  motor1.run(FORWARD);
+  motor2.run(FORWARD);
+  motor3.run(BACKWARD);
+  motor4.run(BACKWARD);
   delay(TURN_DELAY);
 }
 
@@ -117,28 +165,41 @@ void setMotorSpeed(int spd) {
 
 // ------------------ SENSOR FUNCTIONS ------------------
 int getDistance() {
-  delay(40);
+  delay(50);  // Wait for sensor to be ready
   int cm = sonar.ping_cm();
-  if (cm == 0) cm = MAX_DISTANCE;
+  
+  // If sensor returns 0, it means no echo received (too far or error)
+  if (cm == 0) {
+    cm = MAX_DISTANCE;  // Treat as clear path
+  }
+  
   return cm;
 }
 
 int scanRight() {
-  myservo.write(50);
+  myservo.write(30);  // Look right (adjusted angle)
   delay(SCAN_DELAY);
   int dist = getDistance();
-  myservo.write(100);
-  delay(150);
-  Serial.print("Right Distance: "); Serial.println(dist);
+  myservo.write(90);  // Return to center
+  delay(200);
+  
+  Serial.print("  Right Distance: "); 
+  Serial.print(dist);
+  Serial.println(" cm");
+  
   return dist;
 }
 
 int scanLeft() {
-  myservo.write(150);
+  myservo.write(150);  // Look left (adjusted angle)
   delay(SCAN_DELAY);
   int dist = getDistance();
-  myservo.write(100);
-  delay(150);
-  Serial.print("Left Distance: "); Serial.println(dist);
+  myservo.write(90);  // Return to center
+  delay(200);
+  
+  Serial.print("  Left Distance: "); 
+  Serial.print(dist);
+  Serial.println(" cm");
+  
   return dist;
 }
